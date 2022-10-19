@@ -20,7 +20,8 @@ Delayed <- R6Class(
   public = list(
     initialize = function(qexpr,
                           name = NULL,
-                          sequential = FALSE, expect_error = FALSE) {
+                          sequential = FALSE, expect_error = FALSE,
+                          timeout = NULL) {
       private$.qexpr <- qexpr
 
       if (is.null(name)) {
@@ -31,6 +32,11 @@ Delayed <- R6Class(
 
       private$.sequential <- sequential
       private$.expect_error <- expect_error
+      if (!is.null(timeout)) {
+        private$.timeout <- timeout
+      } else {
+        private$.timeout <- Inf
+      }
       # TODO: this will break for nested expressions and non-expressions
       private$.dependencies <- lapply(call_args(qexpr),
         eval_bare,
@@ -130,6 +136,7 @@ Delayed <- R6Class(
       value <- scheduler$compute()
       return(value)
     }
+    
   ),
 
   active = list(
@@ -185,7 +192,18 @@ Delayed <- R6Class(
 
       return(result)
     },
-
+    runtime_self = function() {
+      return(private$.job$runtime)
+    },
+    runtime = function(){
+      if(is.null(private$.runtime_total)){
+        sub_times <- sapply(self$delayed_dependencies,`[[`,"runtime")
+        
+        private$.runtime_total <- sum(unlist(sub_times))+self$runtime_self
+      }
+      
+      return(private$.runtime_total)
+    },
     state = function() {
       return(private$.state)
     },
@@ -219,12 +237,29 @@ Delayed <- R6Class(
       }
       return(private$.sequential)
     },
-
+    task_order = function(force) {
+      if (!missing(force)) {
+        private$.task_order <- force
+      }
+      return(private$.task_order)
+    },
     expect_error = function(force) {
       if (!missing(force)) {
         private$.expect_error <- force
       }
       return(private$.expect_error)
+    },
+    timeout = function(force) {
+      if (!missing(force)) {
+        private$.timeout <- force
+      }
+      return(private$.timeout)
+    },
+    seed = function(force) {
+      if (!missing(force)) {
+        private$.seed <- force
+      }
+      return(private$.seed)
     }
   ),
 
@@ -239,8 +274,12 @@ Delayed <- R6Class(
     .uuid = NULL,
     .sequential = FALSE,
     .expect_error = FALSE,
+    .task_order = NULL,
     .state = "waiting",
-    .dependents = c()
+    .dependents = c(),
+    .timeout = NULL,
+    .runtime_total = NULL,
+    .seed = NULL
   )
 )
 
@@ -251,6 +290,7 @@ Delayed <- R6Class(
 #' @param expr expression to delay
 #' @param sequential if TRUE, never parallelize this task
 #' @param expect_error if TRUE, pass error to downstream tasks instead of
+#' @param timeout specify a time limit for computation
 #'  halting computation
 #'
 #' @rdname delayed
@@ -259,9 +299,9 @@ Delayed <- R6Class(
 #' d <- delayed(3 + 4)
 #' d$compute()
 #' @export
-delayed <- function(expr, sequential = FALSE, expect_error = FALSE) {
+delayed <- function(expr, sequential = FALSE, expect_error = FALSE, timeout = NULL) {
   qexpr <- enquo(expr)
-  Delayed$new(qexpr, sequential = sequential, expect_error = expect_error)
+  Delayed$new(qexpr, sequential = sequential, expect_error = expect_error, timeout = timeout)
 }
 
 ###############################################################################

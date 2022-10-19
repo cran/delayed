@@ -24,7 +24,6 @@ Scheduler <- R6Class(
                           verbose = FALSE,
                           progress = FALSE, ...) {
       private$.delayed_object <- delayed_object
-
       private$.task_lists <- list(
         waiting = env(),
         ready = env(),
@@ -65,6 +64,9 @@ Scheduler <- R6Class(
                                dependent_uuid = NULL) {
       state <- delayed_object$update_state
       uuid <- delayed_object$uuid
+      delayed_object$seed <- runif(1,0,1e6)
+      private$.n_tasks <- private$.n_tasks + 1
+      delayed_object$task_order <- private$.n_tasks
       assign(uuid, delayed_object, envir = private$.task_lists[[state]])
       if (!is.null(dependent_uuid)) {
         delayed_object$register_dependent(dependent_uuid)
@@ -129,6 +131,7 @@ Scheduler <- R6Class(
             SequentialJob$new(current_task)
             self$update_task(current_task, "ready", "running")
           } else {
+            current_task$timeout <- self$time_left
             job <- job_type$new(current_task)
             self$update_task(current_task, "ready", "running")
           }
@@ -180,11 +183,12 @@ Scheduler <- R6Class(
       return(updated_tasks)
     },
     compute = function() {
+      private$.start_time <- proc.time()
       while (!private$.delayed_object$resolved) {
         updated_tasks <- self$compute_step()
         if (length(updated_tasks) == 0) {
           # nothing was updated, so lets wait a bit before we check again
-          Sys.sleep(0.1)
+          Sys.sleep(0.01)
         }
       }
 
@@ -209,13 +213,27 @@ Scheduler <- R6Class(
           closest_dependent_count,
           private$.task_lists[["waiting"]]
         )
-        return(ready_tasks[[which.min(counts)]])
+
+        orders <- sapply(ready_tasks, `[[`, "task_order")
+        nrt <- ready_tasks[order(counts, orders)][[1]]
+        return(nrt)
       } else {
         return(NULL)
       }
     },
     delayed_object = function() {
       return(private$.delayed_object)
+    },
+    time_left = function() {
+      timeout <- self$delayed_object$timeout
+      if (is.null(timeout)) {
+        return(Inf)
+      } else {
+        time_elapsed <- (proc.time() - private$.start_time)[[3]]
+        time_left <- timeout - time_elapsed
+      }
+
+      return(time_left)
     }
   ),
 
@@ -229,7 +247,8 @@ Scheduler <- R6Class(
     .verbose = FALSE,
     .progress = NULL,
     .n_tasks = 0,
-    .task_lists = list()
+    .task_lists = list(),
+    .start_time = NULL
   )
 )
 
