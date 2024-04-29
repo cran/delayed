@@ -1,4 +1,4 @@
-## ---- echo=FALSE, results='hide'----------------------------------------------
+## ----echo=FALSE, results='hide'-----------------------------------------------
 library(delayed)
 
 ## ----delay_expr, echo=TRUE, results='markup'----------------------------------
@@ -38,7 +38,7 @@ chained_delayed_10 <- delayed_adder(delayed_object_7, delayed_object_3)
 # We can still compute its result.
 chained_delayed_10$compute()
 
-## ---- fig.show='hold'---------------------------------------------------------
+## ----fig.show='hold'----------------------------------------------------------
 plot(chained_delayed_10)
 
 ## -----------------------------------------------------------------------------
